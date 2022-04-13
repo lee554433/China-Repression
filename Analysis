@@ -14,16 +14,17 @@ class(country)
 library(broom)
 Chn <- tidy(chn_shp)
 
-# Plot it
+# Create county centroids
 install.packages("geosphere")
 install.packages("ggmap")
-library(sp)
-library(spdep)
-
 install.packages("rgdal")
 install.packages("rgeos")
+
+library(sp)
+library(spdep)
 library(maptools)
 library(rgeos)
+
 centr <- gCentroid(chn_shp, byid = TRUE)
 
 plot(chn_shp)
@@ -120,7 +121,7 @@ library(MASS)
 library(foreign)
 
 
-#Create area
+#Create land area and population density
 library(sp)
 area<- gArea(chn_shp, byid = TRUE)
 area<-as.data.frame(area)
@@ -130,6 +131,7 @@ chn_analysis <- merge(chn_analysis, area, by = "id", all.x = TRUE)
 chn_analysis$pop_density<- (chn_analysis$pop_1964/ chn_analysis$area_sqkm)
 summary(chn_analysis$pop_density)
 d <- chn_analysis[!(is.na(chn_analysis$pop_density)), ]
+
 #Negative binomial model
 m2<- glm.nb(victim_per100000 ~ minor_percent_1964+ 
               percent_Han_PC + percent_Han_head+ 
