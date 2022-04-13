@@ -1,0 +1,139 @@
+# China-Repression
+#Load shape file
+install.packages("sp")
+library(sf)
+install.packages("rgdal",repos = "http://cran.us.r-project.org")
+library(rgdal)
+chn_shp <- readOGR( 
+  "C:/Users/Dennis/Desktop/RA_China/data/CHN_adm3.shp", 
+  verbose=FALSE)
+plot(chn_shp)
+country <- rgeos::gUnaryUnion(chn_shp, id = chn_shp$id)
+plot(country)
+class(country)
+library(broom)
+Chn <- tidy(chn_shp)
+
+# Plot it
+install.packages("geosphere")
+install.packages("ggmap")
+library(sp)
+library(spdep)
+
+install.packages("rgdal")
+install.packages("rgeos")
+library(maptools)
+library(rgeos)
+centr <- gCentroid(chn_shp, byid = TRUE)
+
+plot(chn_shp)
+points(centr, pch = 19, col = "red", cex = .25)
+
+library(geosphere)
+install.packages("gdistance")
+install.packages("raster")
+install.packages("igraph")
+install.packages("magrittr")
+install.packages("leaflet")
+library(gdistance)
+library(raster)
+library(sp)
+library(leaflet)
+library(magrittr)
+library(spatstat)
+library(maptools)
+install.packages("sf")
+library(rgeos)
+apply(gDistance(spts, chn_shp,byid=TRUE),2,min)
+
+library(geosphere)
+dist.border <- geosphere::dist2Line(spts, chn_shp, distfun=distGeo)
+
+#Create spatial polygon object
+library(sp)
+library(dplyr)
+slotNames(chn_shp)
+chn_shp@polygons[[1]] %>% class()
+chn_shp@polygons[[1]]@Polygons[[1]]@coords %>% plot()
+
+library(broom)
+chn_df <- tidy(chn_shp)
+chn_df %>% head(3)
+# Plot the tidied shapefile
+library(ggplot2)
+class(centr)
+centr <- centr %>% tbl_df()
+summary(centr)
+head(chn_shp)
+ggplot(data = chn_df, aes(long, lat, group = group)) +
+  geom_polygon(fill = "grey90") +
+  geom_path(size = 0.3) +
+  xlab("Longitude") +
+  ylab("Latitude") +
+  ggtitle("China counties") +
+  coord_map()
+
+dis<-dist2Line(centr, chn_shp, distfun=distGeo)
+class(dis)
+dis$ID
+plot(makeLine(chn_shp), type='l')
+points(centr)
+
+dis<-as.data.frame(dis)
+dis$id<- seq.int(nrow(dis))
+chn_sec<-rename(chn_sec, id = ID)
+library(tidyverse)
+chn_sec<-read.csv("C:/Users/Dennis/Desktop/RA_China/China_section.csv")
+head(chn_section)
+
+chn_analysis <- merge(chn_sec, dis, by = "id", all.x = TRUE)
+
+#Distance to country border
+dist_border<-dist2Line(centr, country, distfun=distGeo)
+dist_border<-as.data.frame(dist_border)
+dist_border$dist_border<- dist_border$distance 
+summary(dist_border)
+dist_border$id<- seq.int(nrow(dist_border))
+dist_border$dist_border_km <- dist_border$dist_border/1000
+
+#Distance to Beijing
+Beijing<- matrix(c(116.397414, 40.180821), ncol = 2, nrow = 1)
+ncol(Beijing)
+dist_beijing<-distGeo(centr, Beijing)
+summary(dist_beijing)
+dist_beijing<- as.data.frame(dist_beijing)
+dist_beijing$id<- seq.int(nrow(dist_beijing))
+dist_beijing$dist_beijing_km <- dist_beijing$dist_beijing / 1000
+
+#Merge dataset
+chn_analysis <- merge(chn_sec, dist_border, by = "id", all.x = TRUE)
+chn_analysis <- merge(chn_analysis, dist_beijing, by = "id", all.x = TRUE)
+saveRDS(chn_analysis, file = "chn_analysis.Rda")
+
+#Regression analysis
+m1<- lm(victim_per100000 ~ minor_percent_1964 + percent_Han_PC + 
+        percent_Han_head + log(dist_border_km) + log(dist_beijing_km),
+        data = chn_analysis)
+summary(m1)
+
+library(MASS)
+library(foreign)
+
+
+#Create area
+library(sp)
+area<- gArea(chn_shp, byid = TRUE)
+area<-as.data.frame(area)
+area$area_sqkm<- area$area * 10000
+area$id<- seq.int(nrow(area))
+chn_analysis <- merge(chn_analysis, area, by = "id", all.x = TRUE)
+chn_analysis$pop_density<- (chn_analysis$pop_1964/ chn_analysis$area_sqkm)
+summary(chn_analysis$pop_density)
+d <- chn_analysis[!(is.na(chn_analysis$pop_density)), ]
+#Negative binomial model
+m2<- glm.nb(victim_per100000 ~ minor_percent_1964+ 
+              percent_Han_PC + percent_Han_head+ 
+              I(log(dist_border_km)) + I(log(dist_beijing_km))+ pop_density,  
+            data = d, 
+            method = "glm.fit")
+summary(m2)
